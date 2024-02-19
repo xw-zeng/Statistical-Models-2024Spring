@@ -1,0 +1,667 @@
+---
+title: "STAT215B - Homework 1"
+author: "Xiaowei Zeng"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    code_folding: show
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, out.width = "80%", fig.align = "center", message = FALSE, warning = FALSE)
+```
+
+```{r}
+babies <- read.table("babies.data", header = TRUE)
+```
+
+```{r}
+summary(babies)
+```
+
+## Preparing the data
+
+Figure out the missingness code for each variable, then replace all occurrences of the missingness code with R’s missing value code, NA.
+```{r}
+babies$gestation[babies$gestation == 999] <- NA
+babies$age[babies$age == 99] <- NA
+babies$height[babies$height == 99] <- NA
+babies$weight[babies$weight == 999] <- NA
+babies$smoke[babies$smoke == 9] <- NA
+```
+
+Some of the variables in the dataset are actually categorical, but are coded numerically. Convert these variables from numeric vectors to factors in the babies data frame, with appropriately named levels.
+```{r}
+babies$parity <- factor(babies$parity, 
+                        levels = c(0, 1), 
+                        labels = c("not_first_born", "first_born"))
+babies$smoke <- factor(babies$smoke, 
+                       levels = c(0, 1), 
+                       labels = c("not_smoke", "smoke"))
+```
+
+Conﬁrm the conversion worked by inspecting a summary of the data frame.
+```{r}
+library(gtsummary)
+tbl_summary(babies, missing_text = "Missing")
+summary(babies)
+```
+
+Look at a small number of other descriptive statistics or graphics that might be helpful in getting an initial feel for the data.
+
+the variable correlation (EDA). P204-205 
+
+The Spearman correlation heatmap:
+```{r}
+library(corrplot)
+library(dplyr)
+babies_c = na.omit(babies) %>% select_if(is.numeric)
+sig = cor.mtest(babies_c, method = "spearman", conf.level = 0.95)
+corrplot(cor(babies_c), method = "color", type = "upper",
+         p.mat = sig$p, sig.level = c(0.001, 0.01, 0.05), 
+         insig = 'label_sig', tl.col = "black", tl.cex = 0.8,
+         tl.srt = 45, tl.pos = "lt", pch.cex = 1.2)
+corrplot(cor(babies_c), method = "number", type = "lower", 
+         cl.pos = FALSE, tl.col = "n", tl.cex = 0.8, 
+         tl.pos = "n", add = T, title = "Correlation plot of numeric variables")
+```
+
+The relationship between smoke and other covariates (bwt, age, height, gestation, height, weight). Since smoke is a categorical variable, we cannot calculate the Pearson/Spearman correlation coefficient, but we can conduct some (non)parametric tests.
+
+t-test:
+```{r}
+t.test(bwt ~ smoke, data = babies)
+t.test(age ~ smoke, data = babies)
+t.test(gestation ~ smoke, data = babies)
+t.test(height ~ smoke, data = babies)
+t.test(weight ~ smoke, data = babies)
+```
+
+Shapiro Wilk test (for normality). We cannot assume normality.
+```{r}
+shapiro.test(babies$bwt[babies$smoke=="smoke"])
+shapiro.test(babies$bwt[babies$smoke!="smoke"])
+shapiro.test(babies$age[babies$smoke=="smoke"])
+shapiro.test(babies$age[babies$smoke!="smoke"])
+shapiro.test(babies$gestation[babies$smoke=="smoke"])
+shapiro.test(babies$gestation[babies$smoke!="smoke"])
+shapiro.test(babies$height[babies$smoke=="smoke"])
+shapiro.test(babies$height[babies$smoke!="smoke"])
+shapiro.test(babies$weight[babies$smoke=="smoke"])
+shapiro.test(babies$weight[babies$smoke!="smoke"])
+```
+
+Nonparametric test: Wilcoxon rank-sum test.
+```{r}
+wilcox.test(bwt ~ smoke, data = babies)
+wilcox.test(age ~ smoke, data = babies)
+wilcox.test(gestation ~ smoke, data = babies)
+wilcox.test(height ~ smoke, data = babies)
+wilcox.test(weight ~ smoke, data = babies)
+```
+
+Except the height variable, the smoke variable has strong association with other variables. It exactly makes sense because height is almost fixed for adults and determined by genes and growing environments, which has little to do with whether mother smokes or not.
+
+## Analyzing claim 1: guidelines
+
+Claim 1 states: mothers who smoke deliver premature babies more often than mothers who do not. A full-term pregnancy is deﬁned by the medical community as lasting 40 weeks. A premature birth is deﬁned as occurring prior to the 37th week of gestation.
+
+### 1. 
+
+Make one or more suitable graphical comparisons of the gestation distribution for smoking mothers to the gestation distribution of non-smoking mothers.
+```{r}
+library(ggplot2)
+ggplot(aes(x = gestation), data = na.omit(babies)) +
+  geom_histogram(aes(fill = smoke, y = ..density..),
+                 alpha = 0.5, position = 'identity') +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  theme_bw() +
+  labs(title = "Histogram of gestation for smoking and non-smoking") +
+  theme(legend.position = c(.85, .8)) 
+```
+
+```{r}
+ggplot(aes(x = gestation), data = na.omit(babies)) +
+  geom_histogram(aes(fill = smoke, y = ..density..),
+                 alpha = 0.5) +
+  stat_density(geom = 'line', position = 'identity', linewidth = 0.8,
+               aes(colour = smoke)) +
+  facet_wrap(~ smoke) +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  guides(color = FALSE, fill = FALSE) + theme_bw()+
+  labs(title = "Histogram of gestation for smoking and non-smoking")
+```
+
+```{r}
+ggplot(aes(x = smoke, y = gestation), data = na.omit(babies)) +
+  geom_boxplot(aes(fill = smoke), varwidth = T) +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  guides(color = FALSE, fill = FALSE) + 
+  theme_bw()+
+  labs(title = "Boxplot of gestation for smoking and non-smoking")
+```
+
+```{r}
+ggplot(aes(x = smoke, y = gestation), data = na.omit(babies)) +
+  geom_boxplot(aes(fill = smoke), varwidth = T) +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  guides(color = FALSE, fill = FALSE) + 
+  ylim(c(225, 325)) +
+  theme_bw() +
+  labs(title = "Histogram of gestation for smoking and non-smoking (truncated)")
+```
+
+### 2. 
+
+Add to the babies data frame a two-level factor variable indicating whether or not each baby was born prematurely. 
+
+```{r}
+babies$premature <- as.factor(ifelse(babies$gestation <= 36 * 7, "premature", "mature"))
+```
+
+Use this factor and the factor smoke to carry out a relevant tabular comparison of distributions.
+
+Count:
+```{r}
+table(babies$smoke, babies$premature)
+```
+
+Mean:
+```{r}
+na.omit(babies[, -3]) %>% group_by(premature, smoke) %>% summarise_all(mean)
+```
+
+### 3.
+
+Make a ﬁgure which allows the comparison in the previous bullet point to be carried out visually.
+
+```{r}
+ggplot(data = na.omit(babies), 
+       aes(x = smoke, fill = premature)) +
+  geom_bar(stat = 'count') +
+  theme_bw() +
+  labs(title = "Barplot of smoke and premature")
+
+ggplot(data = na.omit(babies), 
+       aes(x = smoke, fill = premature)) +
+  geom_bar(stat = 'count', position = position_dodge()) +
+  theme_bw() +
+  labs(title = "Barplot of smoke and premature") +
+  theme(legend.position = c(.85, .8)) 
+```
+
+### 4. 
+
+Use the same table to carry out one or more hypothesis tests of the null hypothesis that smoking and non-smoking mothers have the same rate of premature delivery.
+
+```{r}
+fisher.test(table(babies$smoke, babies$premature))
+chisq.test(table(babies$smoke, babies$premature))
+```
+
+### 5. 
+
+A related question is whether the overall average gestation time is shorter for smoking mothers, compared to non-smoking mothers. Conduct one or more appropriate hypothesis tests.
+
+Parametric: t.test, assume normality.
+```{r}
+t.test(gestation ~ smoke, data = babies, alternative = "greater")
+```
+
+However, non-normality.
+```{r}
+shapiro.test(babies$gestation[babies$smoke=="smoke"])
+shapiro.test(babies$gestation[babies$smoke!="smoke"])
+```
+
+Nonparametric: Wilcoxon Rank-sum Test
+```{r}
+wilcox.test(gestation ~ smoke, data = babies, alternative = "greater")
+```
+
+### 6. 
+
+If there are other statistics, tables, ﬁgures, tests, or analyses that seem useful or important to you in assessing claim 1, produce them and report on them.
+
+We can conduct a cluster analysis using age, height, weight and the numeric values of parity variable.
+
+The scree plot shows that the number of cluster (k) should be chosen as 3.
+```{r}
+library(cluster)
+library(factoextra)
+babies_c <- cbind(babies[, c(2, 4:7)], 
+                  as.numeric(babies$parity) - 1)
+babies_b <- na.omit(babies_c)
+babies_c <- data.frame(scale(babies_b[, -c(1, 5)]))
+colnames(babies_c)[4] <- "parity"
+
+wss <- (nrow(babies_c) - 1) * sum(apply(babies_c, 2, var))
+for (i in 2:8) {
+  set.seed(0)
+  wss[i] <- sum(kmeans(babies_c, centers = i)$withinss)
+}
+ggplot() + 
+  geom_point(aes(x = 1:8, y = wss)) + 
+  geom_line(aes(x = 1:8, y = wss)) +
+  labs(x = "Number of Clusters", 
+       y = "Within groups sum of squares", 
+       title = "Scree plot") +
+  theme_bw()
+```
+
+The group means of each cluster are as follows.
+```{r}
+set.seed(0)
+kmeans_res <- kmeans(babies_c, centers = 3)
+babies_b$cluster <- kmeans_res$cluster
+na.omit(babies_b[, c(1:4, 7)]) %>% 
+  group_by(cluster) %>% 
+  summarise_all(mean)
+```
+
+Then we look at the distribution of gestation in each groups with similar features. In each cluster, it shows an obvious pattern that mothers who smoke have shorter gestation days.
+```{r}
+ggplot(aes(y = gestation), data = babies_b) +
+  geom_boxplot(aes(x = smoke)) +
+  facet_wrap(~ cluster) +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  guides(color = FALSE, fill = FALSE) + theme_bw() +
+  ylim(225, 325) + labs(title = "Boxplot of Gestation in Each Cluster with Smoke")
+```
+
+Finally I conduct Wilcoxon rank-sum tests for each cluster.
+
+```{r}
+wilcox.test(gestation ~ smoke, 
+            data = babies_b[babies_b$cluster == 1,], 
+            alternative = "greater")
+wilcox.test(gestation ~ smoke, 
+            data = babies_b[babies_b$cluster == 2,], 
+            alternative = "greater")
+wilcox.test(gestation ~ smoke, 
+            data = babies_b[babies_b$cluster == 3,], 
+            alternative = "greater")
+```
+
+Besides, gestation may be affected by other covariates. Use stepwise to remove variables and find the smoke variable is significant at the significant level of 0.05 (t-test), which supports claim 1. The reason why we don't use born weight as the independent variable is that it is a collider, affected by both gestation and other covariates, which should not be added in the model.
+```{r}
+fit <- lm(gestation ~ smoke + parity + age + height + weight, data = na.omit(babies))
+fit <- step(fit)
+summary(fit)
+```
+
+## Analyzing claim 2: guidelines
+
+Claim 2 states: Cigarette smoking has a stronger relationship to infant birth weight than several other relevant covariates. The only other covariates available in the data for us to check are parity, age, height, and weight.
+
+### 1. 
+
+Compare the difference in the average birth-weight between smoking and non-smoking mothers to the difference in the average birth-weight between ﬁrst-borns and non-ﬁrst-borns. Conduct suitable hypothesis tests to accompany the comparison.
+
+t-test:
+```{r}
+t.test(bwt ~ smoke, data = babies, alternative = "greater")
+t.test(bwt ~ parity, data = babies, alternative = "greater")
+```
+
+Shapiro Wilk test (for normality). We cannot assume normality.
+```{r}
+shapiro.test(babies$bwt[babies$smoke=="smoke"])
+shapiro.test(babies$bwt[babies$smoke=="not_smoke"])
+shapiro.test(babies$bwt[babies$parity=="first_born"])
+shapiro.test(babies$bwt[babies$parity=="not_first_born"])
+```
+
+Nonparametric test:
+```{r}
+w1 <- wilcox.test(bwt ~ smoke, data = babies, 
+                  alternative = "greater", conf.int = TRUE)
+w1
+w2 <- wilcox.test(bwt ~ parity, data = babies, 
+                  alternative = "greater", conf.int = TRUE)
+w2
+```
+
+Compare the $p$-value and the confidence interval, we can conclude that the difference in the average birth-weight between smoking and non-smoking mothers is more significant.
+
+However, we need to conduct a quantitative test to test the significance.
+
+$$
+\begin{aligned}
+Y = & \beta_0 + \beta_1 X_1+\beta_2 X_2 \\
+=& \beta_0 + (\theta_1 + \beta_2 )X_1 + \beta_2X_2 \\
+=& \beta_0 + \theta_1 X_1 + \beta_2 (X_1 + X_2)
+\end{aligned}
+$$
+
+The $p$-value of the coefficient $\theta = \beta_1 - \beta_2$ is smaller than 0.001, indicating that there's a significant difference between the two difference. Compared to whether first born or not, smoke is the more influenced variable on born weight.
+```{r}
+babies$smoke_parity <- (as.numeric(babies$smoke) - 1) +
+  (as.numeric(babies$parity) - 1)
+fit <- lm(bwt ~ smoke_parity, data = babies)
+summary(fit)
+```
+
+### 2. 
+
+Divide the mothers into “tall” (above median height in the data) and “short” (below median height in the data). 
+```{r}
+babies$height_cat <- ifelse(babies$height > median(na.omit(babies$height)), 0, 1)
+babies$height_cat <- factor(babies$height_cat, levels = c(0, 1), 
+                            labels = c("tall", "short"))
+```
+
+Repeat the comparison of the previous bullet point for babies born to tall versus short women (rather than for ﬁrst-borns versus non-ﬁrst-borns). 
+
+I think there's something wrong in the instruction document because the main variable we considered is the smoke variable, not the parity variable. So in the following bullet points, I will compare the difference in non-smoker and smoker moms and the difference in groups by other variable.
+
+t-test:
+```{r}
+t.test(bwt ~ smoke, data = babies, alternative = "greater")
+t.test(bwt ~ height_cat, data = babies, alternative = "greater")
+```
+
+Shapiro Wilk test (for normality). We cannot assume normality.
+```{r}
+shapiro.test(babies$bwt[babies$smoke=="smoke"])
+shapiro.test(babies$bwt[babies$smoke=="not_smoke"])
+shapiro.test(babies$bwt[babies$height_cat=="tall"])
+shapiro.test(babies$bwt[babies$height_cat=="short"])
+```
+
+Nonparametric test:
+```{r}
+w1 <- wilcox.test(bwt ~ smoke, data = babies, 
+                  alternative = "greater", conf.int = TRUE)
+w1
+w2 <- wilcox.test(bwt ~ height_cat, data = babies, 
+                  alternative = "greater", conf.int = TRUE)
+w2
+```
+
+Compare the $p$-value and the confidence interval, we can conclude that the difference in the average birth-weight between smoking and non-smoking mothers is more significant.
+
+However, we need to conduct a quantitative test to test the significance.
+
+The $p$-value of the coefficient $\theta = \beta_1 - \beta_2$ is 0.065 > 0.05, indicating that we cannot reject the null hypothesis that $\beta_1 = \beta_2$. Therefore, we cannot lead to the conclusion that smoke is the more influenced variable on born weight.
+```{r}
+babies$smoke_height <- (as.numeric(babies$smoke) - 1) +
+  (2 - as.numeric(babies$height_cat))
+fit <- lm(bwt ~ smoke_height, data = babies)
+summary(fit)
+```
+
+### 3. 
+
+Do the same again. Divide the mothers into “heavy” (above median weight) and “light” (below median weight).
+```{r}
+babies$weight_cat <- ifelse(babies$weight > median(na.omit(babies$weight)), 0, 1)
+babies$weight_cat <- factor(babies$weight_cat, levels = c(0, 1), 
+                            labels = c("heavy", "light"))
+```
+
+Repeat the comparison of the previous bullet point for babies born to heavy versus light women (rather than for smokers versus non-smokers).
+
+t-test:
+```{r}
+t.test(bwt ~ smoke, data = babies, alternative = "greater")
+t.test(bwt ~ weight_cat, data = babies, alternative = "greater")
+```
+
+Shapiro Wilk test (for normality). We cannot assume normality.
+```{r}
+shapiro.test(babies$bwt[babies$smoke=="smoke"])
+shapiro.test(babies$bwt[babies$smoke=="not_smoke"])
+shapiro.test(babies$bwt[babies$weight_cat=="heavy"])
+shapiro.test(babies$bwt[babies$weight_cat=="light"])
+```
+
+Nonparametric test:
+```{r}
+w1 <- wilcox.test(bwt ~ smoke, data = babies, 
+                  alternative = "greater", conf.int = TRUE)
+w1
+w2 <- wilcox.test(bwt ~ weight_cat, data = babies, 
+                  alternative = "greater", conf.int = TRUE)
+w2
+```
+
+Compare the $p$-value and the confidence interval, we can conclude that the difference in the average birth-weight between smoking and non-smoking mothers is more significant.
+
+However, we need to conduct a quantitative test to test the significance.
+
+The $p$-value of the coefficient $\theta = \beta_1 - \beta_2$ is 0.019 < 0.05, indicating that there's a significant difference between the two difference. Compared to whether heavy or light, smoke is the more influenced variable on born weight.
+```{r}
+babies$smoke_weight <- (as.numeric(babies$smoke) - 1) +
+  (2 - as.numeric(babies$weight_cat))
+fit <- lm(bwt ~ smoke_weight, data = babies)
+summary(fit)
+```
+
+### 3.5
+
+Though there's no guideline related to the identification of the age variable, since Claim 2 also includes the age variable, we want to do something the same as the previous bullet points.
+
+Divide the mothers into “midage” (above median age) and “young” (below median age).
+```{r}
+babies$age_cat <- ifelse(babies$age > median(na.omit(babies$age)), 0, 1)
+babies$age_cat <- factor(babies$age_cat, levels = c(0, 1), 
+                         labels = c("midage", "young"))
+```
+
+Repeat the comparison of the previous bullet point for babies born to midage versus young women (rather than for smokers versus non-smokers).
+
+t-test:
+```{r}
+t.test(bwt ~ smoke, data = babies, alternative = "greater")
+t.test(bwt ~ age_cat, data = babies, alternative = "greater")
+```
+
+Shapiro Wilk test (for normality). We cannot assume normality.
+```{r}
+shapiro.test(babies$bwt[babies$smoke=="smoke"])
+shapiro.test(babies$bwt[babies$smoke=="not_smoke"])
+shapiro.test(babies$bwt[babies$age_cat=="midage"])
+shapiro.test(babies$bwt[babies$age_cat=="young"])
+```
+
+Nonparametric test:
+```{r}
+w1 <- wilcox.test(bwt ~ smoke, data = babies, 
+                  alternative = "greater", conf.int = TRUE)
+w1
+w2 <- wilcox.test(bwt ~ age_cat, data = babies, 
+                  alternative = "greater", conf.int = TRUE)
+w2
+```
+
+Compare the $p$-value and the confidence interval, we can conclude that the difference in the average birth-weight between smoking and non-smoking mothers is more significant.
+
+However, we need to conduct a quantitative test to test the significance.
+
+The $p$-value of the coefficient $\theta = \beta_1 - \beta_2$ is far smaller than 0.001, indicating that there's a significant difference between the two difference. Compared to whether midage or young, smoke is the more influenced variable on born weight.
+```{r}
+babies$smoke_age <- (as.numeric(babies$smoke) - 1) +
+  (as.numeric(babies$age_cat) - 1)
+fit <- lm(bwt ~ smoke_age, data = babies)
+summary(fit)
+```
+
+
+### 4. 
+
+Make a multi-panel ﬁgure which allows the comparisons of the previous three bullet points to be carried out visually for whole distributions, rather than averages. Put the y-axes across the panels in exactly the same range, to ease visual comparison.
+
+It seems that when we take a direct look at the difference between the distributions, we can lead to a same conclusion as the aforementioned quantitative hypothesis test, that both smoke and height has the most significant impact on infant born weight, while smoke is more influenced than age, parity and weight.
+
+```{r}
+library(patchwork)
+
+p1 <- ggplot(aes(x = bwt), data = na.omit(babies)) +
+  geom_histogram(aes(fill = smoke, y = ..density..),
+                 alpha = 0.5, position = 'identity', 
+                 binwidth = 10) +
+  theme_bw() +
+  coord_flip() +
+  ylim(c(0, 0.028)) + 
+  xlim(c(55, 176)) + 
+  theme(plot.title = element_text(hjust = 0.5)) +
+  theme(legend.position = c(.85, .8)) 
+
+p2 <- ggplot(aes(x = bwt), data = na.omit(babies)) +
+  geom_histogram(aes(fill = parity, y = ..density..),
+                 alpha = 0.5, position = 'identity', 
+                 binwidth = 10) +
+  theme_bw() +
+  coord_flip() +
+  ylim(c(0, 0.028)) + 
+  xlim(c(55, 176)) + 
+  theme(plot.title = element_text(hjust = 0.5)) +
+  theme(legend.position = c(.85, .8))
+
+p3 <- ggplot(aes(x = bwt), data = na.omit(babies)) +
+  geom_histogram(aes(fill = height_cat, y = ..density..),
+                 alpha = 0.5, position = 'identity', 
+                 binwidth = 10) +
+  theme_bw() +
+  coord_flip() +
+  ylim(c(0, 0.028)) + 
+  xlim(c(55, 176)) + 
+  theme(plot.title = element_text(hjust = 0.5)) +
+  theme(legend.position = c(.85, .8)) 
+
+p4 <- ggplot(aes(x = bwt), data = na.omit(babies)) +
+  geom_histogram(aes(fill = weight_cat, y = ..density..),
+                 alpha = 0.5, position = 'identity', 
+                 binwidth = 10) +
+  theme_bw() +
+  coord_flip() +
+  ylim(c(0, 0.028)) + 
+  xlim(c(55, 176)) + 
+  theme(plot.title = element_text(hjust = 0.5)) +
+  theme(legend.position = c(.85, .8)) 
+
+p5 <- ggplot(aes(x = bwt), data = na.omit(babies)) +
+  geom_histogram(aes(fill = age_cat, y = ..density..),
+                 alpha = 0.5, position = 'identity', 
+                 binwidth = 10) +
+  theme_bw() +
+  coord_flip() +
+  ylim(c(0, 0.028)) + 
+  xlim(c(55, 176)) + 
+  theme(plot.title = element_text(hjust = 0.5)) +
+  theme(legend.position = c(.85, .8)) 
+
+(p1 | p2 | p3) / (p1 | p4 | p5)
+ggsave("1.png", width = 16, height = 7)
+```
+
+### 5. 
+
+Fit a multiple linear regression of birth-weight against height, weight, and parity (but not smoking status). Summarize and check the ﬁt.
+
+Actually, we should still introduce age into the linear regression, but the $p$-value of age in the following regression is 0.96, which is really close to 1. So it is very obvious that the relationship between age and bwt is not as significant as that between smoke and bwt. Therefore, I will follow the guideline in the instruction document.
+
+```{r}
+fit <- lm(bwt ~ height + weight + parity + age, data = na.omit(babies))
+summary(fit)
+```
+
+Only the height and weight variable has a significant impact (at significance level of 0.05).
+
+```{r}
+fit1 <- lm(bwt ~ height + weight + parity, data = na.omit(babies))
+summary(fit1)
+```
+
+### 6. 
+
+Fit a second regression like the previous bullet point, but including smoking status. Compare the two regression models informally (using R^2) and formally (using anova). Interpret the results of the comparison.
+
+The coefficients of height and weight in both model 1 and model 2 do not change much after we introduce the smoke variable, which means smoke variable can only explain a little of the impact that other variables have on the infanct body weight. It really makes sense because (the relationship between smoke and other variables is trivial).
+
+```{r}
+fit2 <- lm(bwt ~ height + weight + parity + smoke, data = na.omit(babies))
+summary(fit2)
+```
+
+The p-value is far smaller than 0.001, indicating that the second model is much better fit, and thus the smoke variable has a strong relationship to infant birth weight.
+
+```{r}
+anova(fit1, fit2)
+```
+
+### 7. 
+
+What are pros and cons of the multiple-regression approach, as compared to the univariate comparisons you carried out initially?
+
+It controls more variable. 
+
+The effective size will become smaller. 
+
+### 8. 
+
+If there are other statistics, tables, ﬁgures, tests, or analyses that seem useful or important to you in assessing claim 2, produce them and report on them.
+
+We conduct univariate regression analyses with only smoke, parity, height, weight and age, and then calculate the root mean square of the residuals (r.m.s.). 
+
+```{r}
+rms <- function(fit, var_name){
+  fit_null <- lm(bwt ~ 1, data = na.omit(babies))
+  rms_null <- sqrt(mean(residuals(fit_null) ^ 2))
+  value <- sqrt(mean(residuals(fit) ^ 2))
+  loss <- rms_null - value
+  print(paste0("r.m.s. reduction (", var_name, "): ", round(loss, 2), 
+               " (", round(loss / rms_null * 100, 2), "%)"))
+}
+
+var_names <- c("smoke", "parity", "height", "height_cat",
+               "weight", "weight_cat", "age", "age_cat")
+for (var_name in var_names){
+  fit <- lm(paste("bwt ~", var_name), data = na.omit(babies))
+  rms(fit, var_name)
+}
+```
+
+### 9. 
+
+Use the plotting package ggplot2 to produce a single multi-panel ﬁgure which does the following: for each bin created in a three-way classiﬁcation by htall/short, heavy/light, parityi, visually compare the birth-weight distribution of smokers versus nonsmokers. Create the ﬁgure using a single R expression that involves only ggplot2 functions. What advantages does this comparison have over the linear regression approach?
+
+```{r}
+ggplot(aes(x = bwt), data = na.omit(babies)) +
+  geom_histogram(aes(fill = smoke, y = ..density..),
+                 alpha = 0.5, position = 'identity', 
+                 binwidth = 10) +
+  facet_wrap(~ height_cat + weight_cat + parity) +
+  theme_bw() +
+  guides(color = FALSE, fill = FALSE) + 
+  ylim(c(0, 0.028)) + 
+  xlim(c(55, 176)) + 
+  theme(plot.title = element_text(hjust = 0.5)) + labs(title = "Multi-panel Histogram")
+```
+
+```{r}
+ggplot(aes(x = smoke, y = bwt), data = na.omit(babies)) +
+  geom_boxplot() +
+  facet_wrap(~ height_cat + weight_cat + parity) +
+  theme_bw() +
+  guides(color = FALSE, fill = FALSE) + 
+  ylim(c(55, 176)) + 
+  theme(plot.title = element_text(hjust = 0.5)) + labs(title = "Multi-panel Boxplot")
+```
+
+The advantage is that we can explicitly compare the distribution in eight bins with similar features in mother's height, weight and parity. The figure shows that in all the eight groups, those infants with nonsmoking mother has larger born weights. 
+
+The disadvantage is that it only gives us the intuition but not a quantitative result or the confidence of our conclusion.
+
+## Conclusion
+
+We can only compare the influence of two-level indicator on the infant born weight. However, the true relationship between the outcome and the variable (especially continuous variables) is usually non-binary and complicated. But if we try to compare the influence in infant born weight on a continuous scale, there's no consistent method for both binary (parity, smoke) and numerical ones. Therefore, it's a great challenge that needs further research and discussion.
+
+```{r}
+# knitr::purl("assignment1-code.Rmd", output = "assignment1.R")
+# savehistory(file = "assignment1-transcript.Rt")
+```
+
+

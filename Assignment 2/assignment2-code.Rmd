@@ -1,0 +1,202 @@
+---
+title: "STAT215B - Assignment 2"
+author: "Xiaowei Zeng"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    code_folding: show
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+## 2.1 
+
+```{r}
+simulate_G <- function(n, alpha, beta) {
+  # Simulate draws of Weibull random variable.
+  # 
+  # Args:
+  #   n: sample size
+  #   alpha: scale parameter
+  #   beta: shape parameter
+  #
+  # Sample U ~ N(0, 1)
+  U <- runif(n)
+  # Compute Weibull r.v. using inversed CDF
+  X <- alpha * (- log(1 - U)) ^ (1 / beta)
+  # return a length-n vector
+  return(X)
+}
+```
+
+## 2.2
+
+```{r}
+library(survival)
+t = sample(1:10, 10, replace = T)
+d = sample(c(TRUE, FALSE), 10, replace = TRUE)
+a = Surv(t, d)
+survfit(a~1)$surv
+```
+
+```{r}
+KM_fit <- function(time, delta){
+  # Obtain the unique values of event times
+  unique_t <- sort(unique(time))
+  m <- length(unique_t)
+  # Kaplan-Meier Estimates
+  KM <- c(1, unique_t)
+  for (i in 1:m){
+    KM[i + 1] <- KM[i] * (1 - sum(time == unique_t[i] & delta) / 
+      sum(time >= unique_t[i]))
+  }
+  # Return the survival function (with precision correction)
+  return (function(time){KM[sum(unique_t <= time* (1 - 1e-16)) + 1]})
+}
+```
+
+```{r}
+km = KM_fit(t, d)
+km(6.1)
+```
+
+## 2.3
+
+```{r}
+library(ggplot2)
+# Define the sample size
+n <- 500
+# Set the random seed for replication
+set.seed(0)
+# Sample X and Y
+time_X <- simulate_G(n, 3, 2)
+time_Y <- simulate_G(n, 2, 2)
+# Compute KM estimates for S_X and S_Y
+S_X <- KM_fit(time_X, ifelse(time_X < 5, 1, 0))
+S_Y <- KM_fit(time_Y, ifelse(time_Y < 5, 1, 0))
+# Define the function for true S_X and S_Y
+S_true <- function(t, alpha, beta){exp(- (t / alpha) ^ beta)}
+# Compare the KM estimates and the true values graphically
+res_X <- data.frame("time" = rep(time_X[time_X <= 5], 2),
+                    "S_X" = c(sapply(time_X[time_X <= 5], S_X),
+                              sapply(time_X[time_X <= 5], 
+                                     function(t){S_true(t, 3, 2)})), 
+                    "Sx_t" = rep(c("KM", "True"), 
+                                 each = sum(time_X <= 5)))
+ggplot(data = res_X) + xlim(c(0, 5)) +
+  geom_step(mapping = aes(x = time, 
+                          y = S_X, color = Sx_t)) + 
+  theme_bw() +
+  labs(title = "Survival Curves for X (KM & True)")
+res_Y <- data.frame("time" = rep(time_Y[time_Y <= 5], 2),
+                    "S_Y" = c(sapply(time_Y[time_Y <= 5], S_Y),
+                              sapply(time_Y[time_Y <= 5], 
+                                     function(t){S_true(t, 2, 2)})), 
+                    "Sy_t" = rep(c("KM", "True"), 
+                                 each = sum(time_Y <= 5)))
+ggplot(data = res_Y) + xlim(c(0, 5)) +
+  geom_step(mapping = aes(x = time, 
+                          y = S_Y, color = Sy_t)) + 
+  theme_bw() +
+  labs(title = "Survival Curves for Y (KM & True)")
+```
+
+## 2.4
+
+```{r}
+# Define the sample size
+n <- 500
+# Set the random seed for replication
+set.seed(0)
+# Sample X and Y
+time_X <- simulate_G(n, 3, 2)
+time_Y <- simulate_G(n, 2, 2)
+# Generate Z_X and Z_Y
+Z_X <- rexp(n, 1 / 10)
+Z_Y <- rexp(n, 1 / 10)
+# Compute KM estimates for S_X and S_Y
+S_X <- KM_fit(time_X, ifelse(time_X - Z_X < 0 & time_X < 5, 1, 0))
+S_Y <- KM_fit(time_Y, ifelse(time_Y - Z_Y < 0 & time_Y < 5, 1, 0))
+# Define the function for true S_X and S_Y
+S_true <- function(t, alpha, beta){exp(- (t / alpha) ^ beta)}
+# Compare the KM estimates and the true values graphically
+res_X <- data.frame("time" = rep(time_X[time_X <= 5], 2),
+                    "S_X" = c(sapply(time_X[time_X <= 5], S_X),
+                              sapply(time_X[time_X <= 5], 
+                                     function(t){S_true(t, 3, 2)})), 
+                    "Sx_t" = rep(c("KM", "True"), 
+                                 each = sum(time_X <= 5)))
+ggplot(data = res_X) + xlim(c(0, 5)) +
+  geom_step(mapping = aes(x = time, 
+                          y = S_X, color = Sx_t)) + 
+  theme_bw() +
+  labs(title = "Survival Curves for X (KM & True)")
+res_Y <- data.frame("time" = rep(time_Y[time_Y <= 5], 2),
+                    "S_Y" = c(sapply(time_Y[time_Y <= 5], S_Y),
+                              sapply(time_Y[time_Y <= 5], 
+                                     function(t){S_true(t, 2, 2)})), 
+                    "Sy_t" = rep(c("KM", "True"), 
+                                 each = sum(time_Y <= 5)))
+ggplot(data = res_Y) + xlim(c(0, 5)) +
+  geom_step(mapping = aes(x = time, 
+                          y = S_Y, color = Sy_t)) + 
+  theme_bw() +
+  labs(title = "Survival Curves for Y (KM & True)")
+```
+
+## 2.5
+
+```{r}
+# Define the sample size
+n <- 500
+# Set the random seed for replication
+set.seed(0)
+# Sample X and Y
+time_X <- simulate_G(n, 3, 2)
+time_Y <- simulate_G(n, 2, 2)
+# Generate Z_X and Z_Y
+Z_X <- sapply(time_X, function(t){rexp(1, ifelse(t < 2, 1 / 10, 1 / 5))})
+Z_Y <- sapply(time_Y, function(t){rexp(1, ifelse(t < 2, 1 / 10, 1 / 5))})
+# Compute KM estimates for S_X and S_Y
+S_X <- KM_fit(time_X, ifelse(time_X - Z_X < 0 & time_X < 5, 1, 0))
+S_Y <- KM_fit(time_Y, ifelse(time_Y - Z_Y < 0 & time_Y < 5, 1, 0))
+# Define the function for true S_X and S_Y
+S_true <- function(t, alpha, beta){exp(- (t / alpha) ^ beta)}
+# Compare the KM estimates and the true values graphically
+res_X <- data.frame("time" = rep(time_X[time_X <= 5], 2),
+                    "S_X" = c(sapply(time_X[time_X <= 5], S_X),
+                              sapply(time_X[time_X <= 5], 
+                                     function(t){S_true(t, 3, 2)})), 
+                    "Sx_t" = rep(c("KM", "True"), 
+                                 each = sum(time_X <= 5)))
+ggplot(data = res_X) + xlim(c(0, 5)) +
+  geom_step(mapping = aes(x = time, 
+                          y = S_X, color = Sx_t)) + 
+  theme_bw() +
+  labs(title = "Survival Curves for X (KM & True)")
+res_Y <- data.frame("time" = rep(time_Y[time_Y <= 5], 2),
+                    "S_Y" = c(sapply(time_Y[time_Y <= 5], S_Y),
+                              sapply(time_Y[time_Y <= 5], 
+                                     function(t){S_true(t, 2, 2)})), 
+                    "Sy_t" = rep(c("KM", "True"), 
+                                 each = sum(time_Y <= 5)))
+ggplot(data = res_Y) + xlim(c(0, 5)) +
+  geom_step(mapping = aes(x = time, 
+                          y = S_Y, color = Sy_t)) + 
+  theme_bw() +
+  labs(title = "Survival Curves for Y (KM & True)")
+```
+
+
+```{r}
+# knitr::purl("assignment2-code.Rmd", output = "assignment2.R")
+# savehistory(file = "assignment2-transcript.Rt")
+```
+
+
+
+

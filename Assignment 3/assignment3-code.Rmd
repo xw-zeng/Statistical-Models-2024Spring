@@ -1,0 +1,237 @@
+---
+title: "STAT215B - Assignment 3"
+author: "Xiaowei Zeng"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    code_folding: show
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Load the dataset and encode the variables. Add 3 variables to the data frame based on "act" column: 1. assign (the assigned treatment); 2. deliver (the delivered treatment); 3. comply (compliance of assigned trmt and delivered trmt).
+```{r}
+data <- read.table("part6_907.txt", header = TRUE, na.strings = 9)
+data$relat <- factor(data$relat, levels = 1:4, 
+                     labels = c("married", "sep", "div", "boygirl"))
+data$sempl <- factor(data$sempl, levels = 0:1, 
+                     labels = c("unemployed", "employed"))
+data$act <- factor(data$act, levels = 1:4, 
+                   labels = c("arrest-arrest", "nonarrest-nonarrest",
+                              "nonarrest-arrest", "arrest-nonarrest"))
+data$assign <- factor(
+  ifelse(data$act == "arrest-arrest" | data$act == "arrest-nonarrest", 1, 0), 
+  levels = c(0, 1), labels = c("nonarrest", "arrest"))
+data$deliver <- factor(
+  ifelse(data$act == "arrest-arrest" | data$act == "nonarrest-arrest", 1, 0), 
+  levels = c(0, 1), labels = c("nonarrest", "arrest"))
+data$comply <- as.factor(
+  ifelse(data$act == "arrest-arrest" | data$act == "nonarrest-nonarrest", 
+         "comply", "crossover"))
+```
+
+## Detective work
+
+Compare rates of recidivism (that is, repeat spousal abuse) between the treatment group, who were assigned to arrest, and the control group, who were not. Also of interest is the same rate comparison, in each of two subgroups: unemployed subjects and employed subjects.
+
+### a. 
+
+Compute all the N’s, including the margins.
+```{r}
+tab_N <- addmargins(table(data$sempl, data$assign))
+tab_N
+```
+
+### b.
+
+PH report the rate of unemployment among the subjects. Does your rate agree with theirs?
+
+On the right side of Page 693, PH say "Approximately 29 percent of the suspects were unemployed at the time of the presenting incident". My rate is computed as follows:
+
+```{r}
+tab_N[1, 3] / tab_N[3, 3]
+```
+
+Approximately 29.00%, which aligns well with their report.
+
+### c. 
+
+PH provide enough information to recover the n’s. See their Figure 1 (Page 695). Compute all the n’s, including the margins.
+
+```{r}
+tab_n <- tab_N[1:2, 1:2]
+tab_n[1, 1] <- round(0.071 * tab_N[1, 1])
+tab_n[1, 2] <- round(0.167 * tab_N[1, 2])
+tab_n[2, 1] <- round(0.123 * tab_N[2, 1])
+tab_n[2, 2] <- round(0.062 * tab_N[2, 2])
+tab_n <- addmargins(tab_n)
+tab_n
+```
+
+### d. 
+
+In a part of the paper separate from Figure 1 and its discussion, PH report the rate of recidivism among arrestees and among non-arrestees. Do your rates agree with theirs?
+
+The rates are similar, but not the same. Similarly, compare the percentage in Figure 1 and the percentage computed on my own, there's also a slight difference. This may be attributed to the difference in dataset? For example, maybe the number of unemployed non-arrested subspects $N_{01}$ is not 139.
+
+```{r}
+tab_n / tab_N
+```
+
+
+## Statistical Work
+
+PH draw several conclusions from their logistic-regression analyses. Evaluate each of these conclusions in turn, by comparing the relevant observed rates in your hard-won counts table.
+
+### a.
+
+Among employed suspects, arrest had a statistically signiﬁcant deterrent effect on the occurrence of a subsequent assault.
+
+Construct a contingency table with treatment and outcome variables among all the employed suspects.
+```{r}
+tab_1 <- table(c("nonarrest", "arrest"), c("nonrecid", "recid"))
+rownames(tab_1) <- c("nonarrest", "arrest")
+tab_1[1, 2] <- tab_n[2, 1]
+tab_1[2, 2] <- tab_n[2, 2]
+tab_1[1, 1] <- tab_N[2, 1] - tab_n[2, 1]
+tab_1[2, 1] <- tab_N[2, 2] - tab_n[2, 2]
+tab_1
+```
+
+#### Fisher Exact Test
+
+The p-value of Fisher exact test is 0.0047 < 0.05, indicating that among employed suspects, arrest has a statistically signiﬁcant deterrent effect on the occurrence of a subsequent assault.
+```{r}
+fisher.test(tab_1, alternative = "less")
+```
+
+#### Two Sample Binomial Proportion Test
+
+The p-value of Binomial proportion test is 0.0048 < 0.05, indicating that among employed suspects, arrest has a statistically signiﬁcant deterrent effect on the occurrence of a subsequent assault.
+```{r}
+prop.test(tab_1, alternative = "less")
+```
+
+### b.
+
+Among unemployed suspects, signiﬁcant increases in subsequent assault were associated with arrest.
+
+Construct a contingency table with treatment and outcome variables among all the unemployed suspects.
+```{r}
+tab_2 <- table(c("nonarrest", "arrest"), c("nonrecid", "recid"))
+rownames(tab_2) <- c("nonarrest", "arrest")
+tab_2[1, 2] <- tab_n[1, 1]
+tab_2[2, 2] <- tab_n[1, 2]
+tab_2[1, 1] <- tab_N[1, 1] - tab_n[1, 1]
+tab_2[2, 1] <- tab_N[1, 2] - tab_n[1, 2]
+tab_2
+```
+
+#### Fisher Exact Test
+
+The p-value of Fisher exact test is 0.0118 < 0.05, indicating that among unemployed suspects, arrest has a statistically signiﬁcant positive effect on the occurrence of a subsequent assault.
+```{r}
+fisher.test(tab_2, alternative = "greater")
+```
+
+#### Two Sample Binomial Proportion Test
+
+The p-value of Binomial proportion test is 0.0121 < 0.05, indicating that among unemployed suspects, arrest has a statistically signiﬁcant positive effect on the occurrence of a subsequent assault.
+```{r}
+prop.test(tab_2, alternative = "greater")
+```
+
+### c.
+
+Among all suspects, there is no statistically signiﬁcant effect of arrest on the occurrence of a subsequent spouse assault.
+
+Construct a contingency table with treatment and outcome variables among all suspects.
+```{r}
+tab_3 <- table(c("nonarrest", "arrest"), c("nonrecid", "recid"))
+rownames(tab_3) <- c("nonarrest", "arrest")
+tab_3[1, 2] <- tab_n[3, 1]
+tab_3[2, 2] <- tab_n[3, 2]
+tab_3[1, 1] <- tab_N[3, 1] - tab_n[3, 1]
+tab_3[2, 1] <- tab_N[3, 2] - tab_n[3, 2]
+tab_3
+```
+
+#### Fisher Exact Test
+
+The p-value of Fisher exact test is 0.44 > 0.05, indicating that among all suspects, there is no statistically signiﬁcant effect of arrest on the occurrence of a subsequent spouse assault.
+```{r}
+fisher.test(tab_3)
+```
+
+#### Two Sample Binomial Proportion Test
+
+The p-value of Binomial proportion test is 0.46 > 0.05, indicating that among all suspects, there is no statistically signiﬁcant effect of arrest on the occurrence of a subsequent spouse assault.
+```{r}
+prop.test(tab_3)
+```
+
+We don't know the result. We can trust the inference in the previous part a and part b. (Only for the binomial test).
+
+### d. Assumption Check for Fisher Exact Test
+
+One of the assumptions underlying Fisher’s exact test: the total number of observed recidivists (overall, and in each employment-status subgroup) would not change if there had been a different randomization outcome in the Dade County experiment. This hypothesis is usually regarded as sharp because each suspect is assumed to have zero treatment effect no matter which group it is assigned to. The only randomness of the Fisher exact test comes from the treatment-assignment (randomization), and the p-value can be justified by the randomization test itself. The randomization process will not change the total number of outcome because the total number of control and assignment are fixed.
+\[
+H_0(\text{Fisher}):Y_i(1) = Y_i(0), \forall i=1,..,N
+\]
+
+However, in the PH example (Neyman model), this number is random (on Page 693, "Eligible cases were randomly assigned to an arrest or a no-arrest response"). Though the Neyman model assumes each observation has two potential outcomes which are fixed values, the total number observed recidivists should be random instead of a fixed number. Thus, under this context, the assumption of Fisher exact test is not compatible with Neyman model in PH setting.
+
+However, Neyman does not assume this sharp hypothesis, but focuses on estimating the average treatment effect for each suspect.
+\[
+H_0(\text{Neyman}):\mathbb E[Y(1) - Y(0)] = 0
+\]
+We can only observe one of $Y_i(1)$ and $Y_i(0)$ given the assigned group. The Neyman unbiased estimator for average treatment effect is
+\[
+\hat{\tau} = \frac{1}{N_{\cdot 1}}\sum_{i=1}^{N_{\cdot\cdot}}T_iY_i - \frac{1}{N_{\cdot0}}\sum_{i=1}^{N_{\cdot\cdot}}(1-T_i)Y_i
+\]
+Thus, the randomization process is likely to change the value of test statistic (though $H_0(\text{Fisher})$ actually implies $H_0(\text{Neyman})$). To determine whether the assumption is compatible with the Neyman model, we need to consider two randomization cases in this spouse assault experiment to test the effect of treatment (arrest).
+
+1. If the randomization is conducted stratifying on the employment status, and assume that no covariate except employment (which is proved in the previous section and the logistic model produced by PH) has a statistically interaction effect with the treatment variable, then the total number of observed recidivists would not change (or just change slightly due to randomness) if there had been a different randomization outcome in the Dade County experiment. 
+
+2. However, if the randomization is conducted without stratification, then great chances are that the proportion of unemployed people in the treatment group and the proportion of unemployed people in the control group are slightly (or even greatly) different. As shown in the previous section, the deterrent effect of employed & arrest and the positive effect of unemployed & arrest have the same direction of influence on the total number of observed recidivists. For example, if more employed people are assigned to treatment group, namely less unemployed people are assigned to treatment group, then the occurrence of recidivism will decrease. On the contrary, if more unemployed people are assigned to treatment group, namely less employed people are assigned to treatment group, then the occurrence of recidivism will increase.
+
+Therefore, the identification of interaction effect with treatment and the stratification in randomization is of great importance when checking the compatibility of Fisher's assumption with Neyman model.
+
+
+### e. 
+
+The binomial test as rendered in textbooks concerns independent Bernoulli trials. We are not thinking of recidivism outcomes as random coin ﬂips (unlike PH). Instead, the treatment assignment is what’s random. How then can the randomization justify the textbook p-value?
+
+The reasons why we don't think of recidivism outcomes as random coin ﬂips (unlike PH) are as follows:
+
+1. Independence assumption: The 907 suspects are supervised by only 396 officers, namely at least 115 officers contribute to three or more cases, suggesting that the observations may not be random or independent and may be correlated with other observations to some extent. 
+
+To deal with the correlation between observations, we can regard the suspects under supervision of the same officer as a cluster, and then replace the permutation test within individuals in the previous analysis with permuting within clusters.
+
+2. Thirdly, the binomial test assume the resampling with replacement, but in PH setting, the resampling is conducted without replacement, where the standard error of the test statistic will shrink. 
+
+To deal with this problem, we can reproduce the resampling process with replacement in the experiment so that the binomial assumption will not be violated.
+
+When it comes to the bias direction in the test, we can conclude that the binomial test is conservative so though the reasoning is not true, we can still trust some of the inference before. On one hand, the correlation between suspects implies a lower variance, which will lead to a larger test statistic and a lower p-value, indicating a smaller probability of rejecting the null hypothesis. On the other hand, the resampling without replacement also overestimates the standard error in the test statistic, namely underestimates the test statistic (since the standard error is in the denominator) and overestimates the p-value. These two aspects all lead to the same result that the binomial test conducted myself is more conservative than the true binomial test.
+
+For the binomial tests among employed and unemployed subgroup respectively, the p-values show significant results, and thus the true binomial test must also reject the null hypothesis and give significant results. However, for the binomial test among all suspects, the p-value is large and we cannot make any informative conclusion about whether the effect is significant or not.
+
+Moreover, there's one more problem in the randomness which is discussed before -- the existence of the interaction effect between employment status and treatment. However, if we condition the recidivism on the employment status variable, the outcomes may come as random coin flips (in each subgroup).
+
+Thus, we can deal with this problem before and after experiment, involving the designing process and analyzing process. 
+
+a. In the designing process, we can conduct stratified randomization experiments by stratifying on the covariates that are potential to affect the outcome, e.g. employment status, and then randomizing. This stratification can ensure the balanced design on the observed covariates (the unobserved covariates may be imbalanced by chance, but randomization is the best thing we can do). This can always lead to more power in the test.
+
+b. In the analyzing process, we can use Analysis of Covariance (ANCOVA) to adjust the covariate effect. The ANCOVA proceeds as follows: (1) Fit a regression model of the outcome on the treatment indicator, centered covariates and the interaction between treatment and centered covariates; (2) Obtain the p-value from the t-test of the coefficient of the treatment indicator. On the other hand, we can also conduct hypothesis test for the treatment effect in each subgroup and look at the p-values. 
+
+Therefore, though the assumptions of binomial test are violated in the PH setting, we can make use of the conservativeness of binomial test to obtain informative conclusion, or we can adopt the aforementioned strategies to deal with the randomness issue and obtain a justified p-value from the analysis on the current Dade County experimental data.
+
+```{r}
+# knitr::purl("assignment3-code.Rmd", output = "assignment3.R")
+# savehistory(file = "assignment3-transcript.Rt")
+```
+
+
