@@ -1,0 +1,151 @@
+---
+title: "STAT215B - Assignment 4"
+author: "Xiaowei Zeng"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    code_folding: show
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, out.width = "80%", fig.align = "center", message = F, warning = F)
+```
+
+Define the simulation function.
+```{r}
+library(expm)
+library(mvtnorm)
+
+Simulate_IVLS <- function(){
+  # Generate data
+  U <- rnorm(n)
+  V <- rnorm(n)
+  Z <- cbind(U, V)
+  error <- rmvnorm(100, sigma = matrix(sigma2 * c(1, rho, rho, 1), 2, 2))
+  epsilon <- error[, 1]
+  delta <- error[, 2]
+  X <- U + 2 * V + delta
+  Y <- beta * X + epsilon
+  
+  # Ordinary Least Squares (OLS) estimation
+  beta_ols <- solve(t(X) %*% X) %*% t(X) %*% Y
+  
+  # Instrumental Variables Least Squares (IVLS) estimation
+  P_Z <- Z %*% solve(t(Z) %*% Z) %*% t(Z)
+  # Two Stage Least Squares 
+  # X_hat <- P_Z %*% X
+  # beta_2sls <- solve(t(X_hat) %*% X_hat) %*% t(X_hat) %*% Y
+  # Generalized Method of Moments
+  beta_ivls <- solve(t(X) %*% P_Z %*% X) %*% t(X) %*% P_Z %*% Y
+  # Verify
+  # beta_2sls == beta_ivls
+  # Compute the Residuals
+  epsilon_hat <- Y - X %*% beta_ivls
+  eta_hat <- sqrtm(solve(t(Z) %*% Z)) %*% t(Z) %*% epsilon_hat
+  
+  # Estimate sigma square
+  sigma2_hat1 <- t(epsilon_hat) %*% epsilon_hat / (n - 1)
+  sigma2_hat2 <- t(eta_hat) %*% eta_hat
+  
+  # return the results
+  return(list(beta_ols = beta_ols,
+              beta_ivls = beta_ivls,
+              sigma2_hat1 = sigma2_hat1, 
+              sigma2_hat2 = sigma2_hat2))
+}
+```
+
+Set the parameters.
+```{r}
+beta <- 3
+sigma2 <- 1
+rho <- 3/4
+n <- 100
+n_sim <- 1000
+```
+
+Main.
+```{r}
+set.seed(1)
+beta_ols_sim <- rep(0, n_sim)
+beta_ivls_sim <- rep(0, n_sim)
+sigma2_hat1_sim <- rep(0, n_sim)
+sigma2_hat2_sim <- rep(0, n_sim)
+for (i in 1:n_sim){
+  result <- Simulate_IVLS()
+  beta_ols_sim[i] <- result[["beta_ols"]]
+  beta_ivls_sim[i] <- result[["beta_ivls"]]
+  sigma2_hat1_sim[i] <- result[["sigma2_hat1"]]
+  sigma2_hat2_sim[i] <- result[["sigma2_hat2"]]
+}
+```
+
+Plot the histograms for the two estimators for beta.
+```{r}
+df_beta <- data.frame(beta_hat = c(beta_ols_sim, beta_ivls_sim),
+                      estimator = c(rep("OLS", n_sim), rep("IVLS", n_sim)))
+library(ggplot2)
+ggplot(aes(x = beta_hat), data = df_beta) +
+  geom_histogram(alpha = 0.5, position = 'identity') +
+  facet_wrap(~ estimator) +
+  theme_bw() +
+  geom_vline(xintercept = beta, linetype = "dashed", color = "blue") + 
+  theme(plot.title = element_text(hjust = 0.5)) + labs(title = "Histogram for OLS & IVLS Estimators")
+```
+
+Report the mean, SD, and RMSE.
+```{r}
+cat("Beta_OLS\n")
+cat("Mean:", mean(beta_ols_sim), "\n")
+cat("SD:", sd(beta_ols_sim), "\n")
+cat("RMSE:", sqrt(mean((beta_ols_sim - beta) ^ 2)), "\n")
+cat("==========\n")
+cat("Beta_IVLS\n")
+cat("Mean:", mean(beta_ivls_sim), "\n")
+cat("SD:", sd(beta_ivls_sim), "\n")
+cat("RMSE:", sqrt(mean((beta_ivls_sim - beta) ^ 2)))
+```
+
+Plot the histograms for the two estimators for sigma square.
+```{r}
+df_sigma2 <- data.frame(sigma2_hat = c(sigma2_hat1_sim, sigma2_hat2_sim),
+                        method = c(rep("Plug-in", n_sim), 
+                                   rep("Transformed", n_sim)))
+ggplot(aes(x = sigma2_hat), data = df_sigma2) +
+  geom_histogram(alpha = 0.5, position = 'identity') +
+  facet_wrap(~ method) +
+  theme_bw() +
+  geom_vline(xintercept = sigma2, linetype = "dashed", color = "blue") + 
+  theme(plot.title = element_text(hjust = 0.5)) + labs(title = "Histogram for Two Sigma2 Estimators")
+```
+
+Adjust the x-axis of the left panel.
+```{r}
+ggplot(aes(x = sigma2_hat), data = df_sigma2[df_sigma2$method=="Plug-in", ]) +
+  geom_histogram(alpha = 0.5, position = 'identity') +
+  theme_bw() +
+  geom_vline(xintercept = sigma2, linetype = "dashed", color = "blue") + 
+  theme(plot.title = element_text(hjust = 0.5)) + 
+  labs(title = "Histogram for Plug-in Estimator of Sigma2")
+```
+
+Report the mean, SD, and RMSE.
+```{r}
+cat("Method 1\n")
+cat("Mean:", mean(sigma2_hat1_sim), "\n")
+cat("SD:", sd(sigma2_hat1_sim), "\n")
+cat("RMSE:", sqrt(mean((sigma2_hat1_sim - sigma2) ^ 2)), "\n")
+cat("==========\n")
+cat("Method 2\n")
+cat("Mean:", mean(sigma2_hat2_sim), "\n")
+cat("SD:", sd(sigma2_hat2_sim), "\n")
+cat("RMSE:", sqrt(mean((sigma2_hat2_sim - sigma2) ^ 2)))
+```
+
+
+```{r}
+# knitr::purl("assignment4-code.Rmd", output = "assignment4.R")
+# savehistory(file = "assignment4-transcript.Rt")
+```
+
