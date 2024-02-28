@@ -1,0 +1,347 @@
+---
+title: "STAT215B - Assignment 5"
+author: "Xiaowei Zeng"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    code_folding: show
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, out.width = "80%", fig.align = "center", message = F, warning = F)
+```
+
+## Math Stats
+
+### Exercise 1.5
+
+Define the simulation function.
+```{r}
+library(mixtools)
+simulate_TSE <- function(A){
+  mu <- rnorm(N, mean = 0, sd = sqrt(A))
+  z <- rmvnorm(B, mu = mu, sigma = diag(N))
+  S <- matrix(rowSums(z ^ 2), B, N)
+  mu_hat <- (1 - (N - 2) / S) * z
+  TSE <- sum(colMeans((mu_hat - matrix(mu, B, N, byrow = T)) ^ 2))
+  return (TSE)
+}
+```
+
+Settings.
+```{r}
+mu <- c(-.81, -.39, -.39, -.08, .69, 
+        .71, 1.28, 1.32, 1.89, 4.00) # original mu in the paper
+N <- 10 # Number of means
+B <- 1000 # Number of simulation
+A_hat <- var(mu) # Estimation of A
+TSE_hat <- (10 * A_hat + 2) / (A_hat + 1)
+TSE_hat
+```
+
+Simulation experiments.
+```{r}
+set.seed(0)
+TSE_list <- rep(0, 10000)
+for (i in 1:10000){
+  TSE_list[i] <- simulate_TSE(A_hat)
+}
+p_value <- 1 - ecdf(TSE_list)(8.13)
+p_value
+```
+
+Plot the histogram of the distribution of TSE.
+```{r}
+library(ggplot2)
+ggplot() + 
+  geom_histogram(aes(x = TSE_list), 
+                 position = "identity", alpha = 0.5) +
+  theme_bw() +
+  labs(x = "TSE", title = "Histogram of TSE", y = "Count") +
+  geom_vline(aes(xintercept = 8.13), linetype = "dashed", color = "blue") +
+  geom_text(aes(x = 8.7, y = 1050, label = "p = 0.19"))
+```
+
+## Simulation
+
+Define the simulation function.
+```{r}
+simulate_Table1.2 <- function(){
+  z <- rmvnorm(B, mu = mu, sigma = diag(N))
+  S <- matrix(rowSums(z ^ 2), B, N)
+  mu_hat_MLE <- z
+  mu_hat_JS <- (1 - (N - 2) / S) * z
+  MSE_MLE <- colMeans((mu_hat_MLE - matrix(mu, B, N, byrow = T)) ^ 2)
+  MSE_JS <- colMeans((mu_hat_JS - matrix(mu, B, N, byrow = T)) ^ 2)
+  result <- data.frame(mu = mu, 
+                       MSE_MLE = round(MSE_MLE, 2),
+                       MSE_JS = round(MSE_JS, 2))
+  return (result)
+}
+```
+
+Repeat the simulation study described on Page 7-9.
+```{r}
+mu <- c(-.81, -.39, -.39, -.08, .69, 
+        .71, 1.28, 1.32, 1.89, 4.00) # original mu in the paper
+N <- 10 # Number of means
+B <- 1000 # Number of simulation
+set.seed(0)
+df <- simulate_Table1.2()
+```
+
+### MLE
+
+Simulate the MSEs for each MLE.
+```{r}
+Simulate_MSE_MLE <- function(){
+  z <- rmvnorm(B, mu = mu, sigma = diag(N))
+  MSE_MLE <- colMeans((z - matrix(mu, B, N, byrow = T)) ^ 2)
+  return (MSE_MLE)
+}
+```
+
+We know that different $\hat \mu_i^{\text{(MLE)}}$'s have the same standard deviation. So we pool them together and then compute the standard deviation for all $\hat \mu_i^{\text{(MLE)}}$'s. The simulated result is nearly the same to the mathametically derived result.
+```{r}
+result_MLE <- matrix(0, 1000, N)
+set.seed(0)
+for (i in 1:1000){
+  result_MLE[i, ] = Simulate_MSE_MLE()
+}
+cat("Standard deviation for MSE_MLE:", sd(result_MLE), "\n")
+cat("Standard deviation for TSE_MLE:", sd(rowSums(result_MLE)))
+```
+
+### J-S Estimator
+
+Simulate the MSEs for each J-S estimator.
+```{r}
+Simulate_MSE_JS <- function(){
+  z <- rmvnorm(B, mu = mu, sigma = diag(N))
+  S <- matrix(rowSums(z ^ 2), B, N)
+  mu_hat_JS <- (1 - (N - 2) / S) * z
+  MSE_JS <- colMeans((mu_hat_JS - matrix(mu, B, N, byrow = T)) ^ 2)
+  return (MSE_JS)
+}
+```
+
+Compute the standard deviation for each $\hat \mu_i^{\text{(JS)}}$.
+```{r}
+result_JS <- matrix(0, 1000, N)
+set.seed(0)
+for (i in 1:1000){
+  result_JS[i, ] = Simulate_MSE_JS()
+}
+cat("Standard deviation for MSE_JS:\n")
+cat(apply(result_JS, 2, sd), "\n")
+cat("Standard deviation for TSE_JS:", sd(rowSums(result_JS)))
+```
+
+## Shrinking Radon
+
+### 1.
+
+Load the data into R. 
+```{r}
+data <- read.table("srrs2.dat", header = TRUE, sep = ",")
+```
+
+Remove the redundant spaces in numbers and strings.
+```{r}
+data$rep <- as.numeric(trimws(data$rep, which = "both"))
+data$wave <- as.numeric(trimws(data$wave, which = "both"))
+data$county <- trimws(data$county, which = "both")
+```
+
+Extract the subset of observations taken in Minnesota basements. Although there is a `basement` variable, you should instead use the `floor` variable -- a zero value means a basement. (Don’t ask.)
+```{r}
+library(dplyr)
+data <- data %>% 
+  filter(floor == 0) %>%
+  filter(state == "MN") %>%
+  select(idnum, county, activity)
+```
+
+### 2. 
+
+Reduce the data set further: keep only the data for counties with at least 10 observations. You should ﬁnd 17 such counties, with a total of 511 observations.
+
+```{r}
+data <- data %>%
+  group_by(county) %>%
+  filter(n() >= 10) %>%
+  ungroup()
+```
+
+### 3. 
+
+Now split the data into two sets: a training set with ﬁve randomly chosen observations from each county, and a test set with the other observations.
+```{r}
+set.seed(2024)
+data_train <- data %>%
+  group_by(county) %>%
+  group_modify(~ sample_n(.x, 5))
+data_test <- data %>%
+  anti_join(data_train, by = "idnum")
+```
+
+### 4.
+
+Compute $\boldsymbol{\mu}$, the vector of mean radon levels by county in the test data. Radon levels are given in the variable `activity`. From now on we will treat $\boldsymbol{\mu}$ as a population-level parameter to be estimated.
+
+```{r}
+mu <- data_test %>%
+  group_by(county) %>%
+  summarise(mu = mean(activity))
+```
+
+### 5. 
+
+Make the standard James-Stein independent-normals assumption: the five observations $z_{i, k}, k=1,..., 5$ in county $i$ are i.i.d. draws from a $N(\mu_i, \tau^2)$ distribution; these five draws are independent of the draws from every other county. Compute $\hat {\boldsymbol{\mu}} ^\text{(MLE)}$, the maximum-likelihood estimate of $\boldsymbol{\mu}$ based on the training data, where
+\[
+\hat \mu_i ^\text{(MLE)} = \frac{1}{5} \sum_{k=1}^5 z_{i, k} = \bar z_i.
+\]
+
+```{r}
+mu_hat_MLE <- data_train %>%
+  group_by(county) %>%
+  summarise(mu_hat_MLE = mean(activity))
+```
+
+### 6. 
+
+We are assuming that the components of $\hat \mu ^\text{(MLE)}$ share a common SE. Using the same number of observations in each county tends to aid this assumption. To estimate this shared SE, you must estimate $\tau^2$, using the pooled-variance technique: add up all the within-county squared residuals, and divide by the total degrees of freedom.
+
+Caution: The SE of $\hat \mu ^\text{(MLE)}$ is not $\tau$. If you proceed as though it is, you will over-shrink.
+
+We are assuming that the components of $\hat {\boldsymbol{\mu}} ^\text{(MLE)}$, share a common standard error (SE). Using the same number of observations in each county tends to aid this assumption. 
+\[
+z_{i, k} \sim N(\mu_i, \tau^2) \quad \rightarrow \quad \hat \mu ^\text{(MLE)}_i = \bar z_i \sim N(\mu_i, \frac{\tau^2}{5})
+\]
+To estimate this shared SE, we estimate $\tau^2$ using the pooled-variance technique: add up all the within-county squared residuals, and divide by the total degrees of freedom,
+\[
+\hat \tau^2 = S_p^2 = \frac{\sum_{i=1}^{17}(5-1)S_i^2}{\sum_{i=1}^{17}(5-1)} = \frac{\sum_{i=1}^{17}S_i^2}{17},
+\]
+where
+\[
+S_i^2 = \frac{1}{5 - 1}\sum_{k=1}^5(z_{i, k} - \bar z_i)^2.
+\]
+The SE of $\hat \mu_i ^\text{(MLE)}$ should be 
+\[
+\sqrt{\frac{\hat \tau^2}{5}}.
+\]
+
+```{r}
+S_i_sq <- data_train %>%
+  group_by(county) %>%
+  summarise(S_i_sq = var(activity)) %>%
+  select(S_i_sq)
+
+tau_hat <- sqrt(mean(S_i_sq$S_i_sq))
+se <- tau_hat / sqrt(5)
+se
+```
+
+Now compute $\hat \mu_i ^\text{(JS)}$, the James-Stein estimator, using the average value $\hat {\boldsymbol\mu} ^\text{(MLE)}$ as the shrinkage target. 
+```{r}
+z_bar <- mean(mu_hat_MLE$mu_hat_MLE)
+S <- var(mu_hat_MLE$mu_hat_MLE) * (17 - 1)
+mu_hat_JS <- z_bar + (1 - (17 - 3) * se ^ 2 / S) * (mu_hat_MLE$mu_hat_MLE - z_bar)
+mu_hat_JS <- data.frame(county = mu_hat_MLE$county,
+                        mu_hat_JS = mu_hat_JS)
+# mu_hat_JS
+```
+
+Ensemble the results together.
+```{r}
+df_result <- data.frame(
+  county = mu$county,
+  mu = round(mu$mu, 2), 
+  mu_hat_MLE = mu_hat_MLE$mu_hat_MLE,
+  mu_hat_JS = round(mu_hat_JS$mu_hat_JS, 2)
+)
+df_result
+```
+
+
+### 7.
+
+What is the total squared error of $\hat {\boldsymbol\mu} ^\text{(MLE)}$? Of $\hat {\boldsymbol\mu} ^\text{(JS)}$? 
+
+```{r}
+TSE_MLE <- sum((mu_hat_MLE$mu_hat_MLE - mu$mu) ^ 2)
+TSE_JS <- sum((mu_hat_JS$mu_hat_JS - mu$mu) ^ 2)
+cat("TSE for MLE estimator:", round(TSE_MLE, 2), "\n")
+cat("TSE for JS estimator:", round(TSE_JS, 2))
+```
+
+What is the ratio of the larger to the smaller? What do you conclude about Stein shrinkage in this application? The larger TSE is 2.17 times than the smaller, indicating a tremendous advantage for the Stein shrinkage.
+```{r}
+round(TSE_MLE / TSE_JS, 2)
+```
+
+However, the effectiveness of the estimators may be greatly dependent on the split of training and testing dataset. To get a more convincing conclusion, we need to conduct a sensitivity test of the dataset splitting.
+
+Define the function of sensitivity test using simulation.
+```{r}
+Simulate_Split <- function(){
+  # Newly split the dataset randomly
+  data_train <- data %>%
+    group_by(county) %>%
+    group_modify(~ sample_n(.x, 5))
+  data_test <- data %>%
+    anti_join(data_train, by = "idnum")
+  # The same process as before
+  mu <- data_test %>%
+    group_by(county) %>%
+    summarise(mu = mean(activity))
+  mu_hat_MLE <- data_train %>%
+    group_by(county) %>%
+    summarise(mu_hat_MLE = mean(activity))
+  S_i_sq <- data_train %>%
+    group_by(county) %>%
+    summarise(S_i_sq = var(activity)) %>%
+    select(S_i_sq)
+  tau_hat <- sqrt(mean(S_i_sq$S_i_sq))
+  se <- tau_hat / sqrt(5)
+  z_bar <- mean(mu_hat_MLE$mu_hat_MLE)
+  S <- var(mu_hat_MLE$mu_hat_MLE) * (17 - 1)
+  mu_hat_JS <- z_bar + (1 - (17 - 3) * se ^ 2 / S) * (mu_hat_MLE$mu_hat_MLE - z_bar)
+  mu_hat_JS <- data.frame(county = mu_hat_MLE$county,
+                          mu_hat_JS = mu_hat_JS)
+  TSE_MLE <- sum((mu_hat_MLE$mu_hat_MLE - mu$mu) ^ 2)
+  TSE_JS <- sum((mu_hat_JS$mu_hat_JS - mu$mu) ^ 2)
+  return(TSE_MLE / TSE_JS)
+}
+```
+
+Conduct simulations. Compute the percentage of $\text{TSE}^\text{(MLE)} < \text{TSE} ^\text{(JS)}$. In approximately 14.4\% of cases, MLE outperforms JS estimator. 
+```{r}
+set.seed(0)
+ratio <- rep(0, 10000)
+for (i in 1:10000){
+  ratio[i] = Simulate_Split()
+}
+mean(ratio < 1)
+```
+
+Plot the distribution of the ratio of $\text{TSE}^\text{(MLE)}$ to $\text{TSE} ^\text{(JS)}$.
+```{r}
+ggplot() + 
+  geom_histogram(aes(x = ratio), 
+                 position = "identity", alpha = 0.5) +
+  theme_bw() + 
+  labs(x = "TSE Raito (MLE / JS)", y = "Count",
+       title = "Histogram of TSE Ratio (MSE / JS)") +
+  geom_vline(aes(xintercept = 1), color = "red", linetype = "dashed") +
+  geom_text(aes(x = 0.7, y = 1200, label = "14.4%"))
+```
+
+To summarize, in this application, JS estimator outperforms MLE in approximately 85.6\% of cases, indicating a tremendous advantage for the empirical Bayes estimates.
+
+```{r}
+# knitr::purl("assignment5-code.Rmd", output = "assignment5.R")
+# savehistory(file = "assignment5-transcript.Rt")
+```
+
