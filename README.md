@@ -24,7 +24,7 @@
 
 <h3 id="1">Assignment 1. EDA and Hypothesis Tests</h3>
 
-- The main job in this assignment is to investigate the connection between maternal smoking and infant health [[Deborah Nolan, 2000]][https://link.springer.com/book/10.1007/b98875] and is conducted mainly following the guideline in the instruction document. 
+- The main job in this assignment is to investigate the connection between maternal smoking and infant health <a href="https://link.springer.com/book/10.1007/b98875">[Deborah Nolan, 2000]</a> and is conducted mainly following the guideline in the instruction document. 
 - Dataset: Child Health and Development Studies (CHDS).
 - Deadline: 17:00 January 22nd, 2024.
 - Updates in the new version: 
@@ -48,8 +48,8 @@
 
 <h3 id="3">Assignment 3. Randomness in Randomization Studies</h3>
 
-- The main job in this assignment is to carry out an analysis of the Dade County experimental data that is justified by the randomization [[Pate and Hamilton, 1992]][https://www.jstor.org/stable/2095922].
-- Dataset: [Randomized Treatments Data for Spouse Abuse Replication Project in Metro-Dade County, Florida, 1987-1989.][https://www.icpsr.umich.edu/web/NACJD/studies/6008/versions/V1]
+- The main job in this assignment is to carry out an analysis of the Dade County experimental data that is justified by the randomization <a href="https://www.jstor.org/stable/2095922">[Pate and Hamilton, 1992]</a>.
+- Dataset: <a href="https://www.icpsr.umich.edu/web/NACJD/studies/6008/versions/V1">Randomized Treatments Data for Spouse Abuse Replication Project in Metro-Dade County, Florida, 1987-1989.</a>
 - Deadline: 17:00 February 6th, 2024.
 - No updates so far.
 
